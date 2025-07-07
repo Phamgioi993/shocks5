@@ -1,6 +1,12 @@
 #!/bin/bash
 
-# Cập nhật và cài đặt Dante SOCKS5
+# Kiểm tra quyền root
+if [[ $EUID -ne 0 ]]; then
+   echo "⚠️ Vui lòng chạy script bằng quyền root: sudo ./install.sh"
+   exit 1
+fi
+
+# Cập nhật hệ thống và cài đặt Dante SOCKS5
 apt update -y && apt upgrade -y
 apt install -y dante-server curl
 
@@ -12,7 +18,7 @@ PASSWORD="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10)"
 useradd -M -s /usr/sbin/nologin $USERNAME
 echo "$USERNAME:$PASSWORD" | chpasswd
 
-# Random port proxy (trong khoảng an toàn)
+# Random port proxy (trong khoảng 20000–30000)
 PROXY_PORT=$(shuf -i 20000-30000 -n 1)
 
 # Lấy IP công cộng của máy chủ
@@ -39,17 +45,17 @@ pass {
 }
 EOF
 
-# Ghi thông tin vào file
+# Lưu thông tin proxy ra file
 echo "SOCKS5 Proxy Credentials:" > /root/proxy-credentials.txt
 echo "Username: $USERNAME" >> /root/proxy-credentials.txt
 echo "Password: $PASSWORD" >> /root/proxy-credentials.txt
 echo "Port: $PROXY_PORT" >> /root/proxy-credentials.txt
 echo "IP: $SERVER_IP" >> /root/proxy-credentials.txt
 
-# Ghi dạng ip:port:user:pass riêng để dễ grep
+# Lưu định dạng ip:port:user:pass riêng
 echo "$SERVER_IP:$PROXY_PORT:$USERNAME:$PASSWORD" > /root/proxy-connection.txt
 
-# Tự động mở port nếu dùng GCP CLI
+# Mở firewall trên GCP nếu có gcloud CLI
 if command -v gcloud &> /dev/null; then
     gcloud compute firewall-rules create socks5-proxy-$PROXY_PORT --allow tcp:$PROXY_PORT --target-tags=socks-proxy
 fi
@@ -58,7 +64,7 @@ fi
 systemctl restart danted
 systemctl enable danted
 
-# In thông tin ra màn hình
+# In thông tin ra terminal
 echo ""
 echo "✅ SOCKS5 Proxy đã được cài đặt thành công!"
 echo "➡️ Proxy: $SERVER_IP:$PROXY_PORT:$USERNAME:$PASSWORD"
