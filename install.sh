@@ -6,9 +6,15 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-# Cập nhật hệ thống và cài đặt Dante SOCKS5
-apt update -y && apt upgrade -y
-apt install -y dante-server curl
+# Phát hiện interface mạng chính (dựa vào route ra internet)
+IFACE=$(ip route get 8.8.8.8 | grep -oP 'dev \K\S+')
+if [[ -z "$IFACE" ]]; then
+  echo "❌ Không phát hiện được interface mạng. Thoát."
+  exit 1
+fi
+
+# Cập nhật và cài đặt Dante SOCKS5
+apt update -y && apt install -y dante-server curl
 
 # Tạo username và password ngẫu nhiên
 USERNAME="user_$(tr -dc 'a-z0-9' </dev/urandom | head -c 8)"
@@ -24,11 +30,11 @@ PROXY_PORT=$(shuf -i 20000-30000 -n 1)
 # Lấy IP công cộng của máy chủ
 SERVER_IP=$(curl -s ifconfig.me)
 
-# Tạo file cấu hình Dante
+# Tạo file cấu hình Dante với interface được phát hiện
 cat <<EOF > /etc/danted.conf
 logoutput: /var/log/danted.log
-internal: eth0 port = $PROXY_PORT
-external: eth0
+internal: $IFACE port = $PROXY_PORT
+external: $IFACE
 method: username
 user.notprivileged: nobody
 
@@ -51,8 +57,6 @@ echo "Username: $USERNAME" >> /root/proxy-credentials.txt
 echo "Password: $PASSWORD" >> /root/proxy-credentials.txt
 echo "Port: $PROXY_PORT" >> /root/proxy-credentials.txt
 echo "IP: $SERVER_IP" >> /root/proxy-credentials.txt
-
-# Lưu định dạng ip:port:user:pass riêng
 echo "$SERVER_IP:$PROXY_PORT:$USERNAME:$PASSWORD" > /root/proxy-connection.txt
 
 # Mở firewall trên GCP nếu có gcloud CLI
